@@ -1,0 +1,330 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>FRONTLINE | FPS Prototype</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080d12;color:#fff;font-family:Arial,sans-serif;touch-action:none}
+#game{width:100%;height:100%;display:block;outline:none}
+#hud{position:absolute;inset:0;pointer-events:none}
+.topbar{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center}
+.brand{font-weight:900;letter-spacing:4px;font-size:20px;color:#d9e7e9}
+.stats{display:flex;gap:18px;text-align:right;font-size:12px;color:#9eb0b5}
+.stats strong{display:block;color:#fff;font-size:21px;margin-top:4px}
+#crosshair{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%)}
+#crosshair:before,#crosshair:after{content:"";position:absolute;background:#e8f4ed}
+#crosshair:before{width:2px;height:22px;left:10px}
+#crosshair:after{height:2px;width:22px;top:10px}
+.bottom{position:absolute;bottom:18px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:end}
+.ammo{font-size:13px;color:#a9bbc0}
+.ammo strong{display:block;font-size:32px;color:#fff}
+#message{position:absolute;top:28%;width:100%;text-align:center;font-size:24px;font-weight:900;letter-spacing:3px;color:#e8f4ed;text-shadow:0 2px 12px #000}
+#overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(4,10,15,.96),rgba(9,24,29,.9));display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+.panel{max-width:460px;width:100%}
+.panel h1{font-size:clamp(42px,10vw,70px);letter-spacing:7px;margin:0;color:#e8f1ed}
+.panel p{color:#a7b9b7;line-height:1.6}
+button{border:0;background:#c7e044;color:#10170c;font-weight:900;padding:15px 28px;border-radius:4px;font-size:14px;letter-spacing:1px}
+#overlay button{margin-top:16px}
+#mobile{position:absolute;inset:0;pointer-events:none;display:none}
+#stickArea{position:absolute;bottom:28px;left:24px;width:130px;height:130px;border:1px solid #ffffff55;border-radius:50%;background:#ffffff0c;pointer-events:auto;touch-action:none}
+#stick{position:absolute;width:52px;height:52px;left:39px;top:39px;border-radius:50%;background:#d9e7e988;border:1px solid #fff8}
+.controls{position:absolute;right:20px;bottom:25px;display:flex;gap:12px;align-items:end;pointer-events:auto}
+.controls button{width:66px;height:66px;padding:5px;border-radius:50%;font-size:10px;background:#d6e3e4dd}
+.controls button.fire{width:82px;height:82px;background:#d9e84d}
+#notice{position:absolute;bottom:110px;left:0;right:0;text-align:center;color:#dce8e5;font-size:12px;pointer-events:none}
+@media(pointer:coarse){#mobile{display:block}.stats{gap:10px}.brand{font-size:16px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="topbar">
+    <div class="brand">FRONTLINE</div>
+    <div class="stats">
+      <div>SCORE<strong id="score">000000</strong></div>
+      <div>TARGETS<strong id="targets">05</strong></div>
+    </div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="message"></div>
+  <div class="bottom">
+    <div class="ammo">AMMUNITION<strong><span id="mag">30</span><span style="color:#71858a"> / </span><span id="reserve">90</span></strong></div>
+    <div class="ammo" style="text-align:right">MISSION<strong style="font-size:15px">TARGET PRACTICE</strong></div>
+  </div>
+</div>
+
+<div id="mobile">
+  <div id="stickArea"><div id="stick"></div></div>
+  <div class="controls">
+    <button id="jump">JUMP</button>
+    <button id="reload">RELOAD</button>
+    <button id="fire" class="fire">FIRE</button>
+  </div>
+  <div id="notice">LEFT: MOVE · DRAG RIGHT SIDE: AIM</div>
+</div>
+
+<div id="overlay">
+  <div class="panel">
+    <h1>FRONTLINE</h1>
+    <p>FIRST-PERSON COMBAT SIMULATION<br>TRAINING FACILITY // SECTOR 07</p>
+    <p>Eliminate all hostile targets. Test your aim, movement and reaction speed.</p>
+    <button id="start">DEPLOY</button>
+    <p style="font-size:11px;margin-top:22px">WASD: MOVE · MOUSE: AIM · CLICK: FIRE · R: RELOAD</p>
+  </div>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+(() => {
+"use strict";
+
+const canvas = document.getElementById("game");
+const engine = new BABYLON.Engine(canvas, true, {preserveDrawingBuffer:false, stencil:true});
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.035,0.055,0.065,1);
+scene.collisionsEnabled = true;
+
+const camera = new BABYLON.UniversalCamera("playerCamera",new BABYLON.Vector3(0,1.8,-10),scene);
+camera.attachControl(canvas,true);
+camera.minZ = 0.1;
+camera.speed = 0.25;
+camera.angularSensibility = 2500;
+camera.inertia = 0.65;
+camera.checkCollisions = true;
+camera.applyGravity = true;
+camera.ellipsoid = new BABYLON.Vector3(0.4,0.9,0.4);
+scene.gravity = new BABYLON.Vector3(0,-0.25,0);
+camera.keysUp = [87];
+camera.keysDown = [83];
+camera.keysLeft = [65];
+camera.keysRight = [68];
+
+const light = new BABYLON.HemisphericLight("ambient",new BABYLON.Vector3(0,1,0),scene);
+light.intensity = 0.85;
+const sun = new BABYLON.DirectionalLight("sun",new BABYLON.Vector3(-0.4,-1,0.5),scene);
+sun.position = new BABYLON.Vector3(0,12,-8);
+sun.intensity = 0.8;
+
+function material(name,color,roughness=1){
+  const m = new BABYLON.StandardMaterial(name,scene);
+  m.diffuseColor = BABYLON.Color3.FromHexString(color);
+  m.specularColor = new BABYLON.Color3(0.12,0.12,0.12);
+  m.roughness = roughness;
+  return m;
+}
+const floorMat = material("floorMat","#29383b");
+const wallMat = material("wallMat","#46565a");
+const crateMat = material("crateMat","#59634b");
+const darkMat = material("darkMat","#172326");
+const targetMat = material("targetMat","#a94c38");
+const headMat = material("headMat","#d1a77c");
+const glowMat = material("glowMat","#d9e84d");
+
+const ground = BABYLON.MeshBuilder.CreateGround("ground",{width:42,height:42},scene);
+ground.material = floorMat;
+ground.checkCollisions = true;
+
+function block(name,x,y,z,w,h,d,mat){
+  const b = BABYLON.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);
+  b.position.set(x,y,z);
+  b.material = mat;
+  b.checkCollisions = true;
+  return b;
+}
+block("backWall",0,3,20,42,6,1,wallMat);
+block("leftWall",-21,3,0,1,6,40,wallMat);
+block("rightWall",21,3,0,1,6,40,wallMat);
+block("farLeft",-11,1.1,5,3,2.2,3,crateMat);
+block("farRight",11,1.1,7,3,2.2,3,crateMat);
+block("midCrate",-5,0.8,1,2.5,1.6,2.5,crateMat);
+block("midCrate2",6,0.8,9,2.5,1.6,2.5,crateMat);
+block("nearCrate",2,0.7,-1,2,1.4,2,darkMat);
+
+const targets = [];
+function createTarget(index,x,z){
+  const root = new BABYLON.TransformNode("targetRoot"+index,scene);
+  root.position.set(x,0,z);
+  const body = BABYLON.MeshBuilder.CreateBox("hostileBody"+index,{width:0.85,height:1.15,depth:0.42},scene);
+  body.position.y = 1.25;
+  body.parent = root;
+  body.material = targetMat;
+  const head = BABYLON.MeshBuilder.CreateSphere("hostileHead"+index,{diameter:0.48,segments:12},scene);
+  head.position.y = 2.12;
+  head.parent = root;
+  head.material = headMat;
+  const plate = BABYLON.MeshBuilder.CreateBox("hostilePlate"+index,{width:0.95,height:0.12,depth:0.5},scene);
+  plate.position.y = 0.62;
+  plate.parent = root;
+  plate.material = darkMat;
+  targets.push({root,parts:[body,head,plate],baseX:x,phase:index*1.7,alive:true});
+}
+[[-12,13],[-6,16],[0,14],[7,17],[13,12]].forEach((p,i)=>createTarget(i,p[0],p[1]));
+
+let score=0, ammo=30, reserve=90, reloading=false, started=false;
+const scoreEl=document.getElementById("score");
+const magEl=document.getElementById("mag");
+const reserveEl=document.getElementById("reserve");
+const targetsEl=document.getElementById("targets");
+const messageEl=document.getElementById("message");
+
+function updateHUD(){
+  scoreEl.textContent=String(score).padStart(6,"0");
+  magEl.textContent=ammo;
+  reserveEl.textContent=reserve;
+  targetsEl.textContent=String(targets.filter(t=>t.alive).length).padStart(2,"0");
+}
+updateHUD();
+
+function showMessage(text,duration=900){
+  messageEl.textContent=text;
+  if(duration) setTimeout(()=>{if(messageEl.textContent===text)messageEl.textContent="";},duration);
+}
+
+function shoot(){
+  if(!started || reloading)return;
+  if(ammo<=0){showMessage("RELOAD",500);return;}
+  ammo--;
+  updateHUD();
+  const ray=camera.getForwardRay(100);
+  const hit=scene.pickWithRay(ray,mesh=>mesh.name.startsWith("hostile"));
+  if(hit && hit.hit && hit.pickedMesh){
+    const target=targets.find(t=>t.alive && t.parts.includes(hit.pickedMesh));
+    if(target){
+      target.alive=false;
+      target.parts.forEach(p=>p.dispose());
+      score+=100;
+      updateHUD();
+      showMessage("+100 TARGET ELIMINATED",800);
+      if(targets.every(t=>!t.alive))showMessage("SECTOR CLEARED",0);
+    }
+  }
+}
+
+function reload(){
+  if(!started || reloading || ammo===30 || reserve<=0)return;
+  reloading=true;
+  showMessage("RELOADING...",1100);
+  setTimeout(()=>{
+    const needed=30-ammo;
+    const amount=Math.min(needed,reserve);
+    ammo+=amount;
+    reserve-=amount;
+    reloading=false;
+    updateHUD();
+  },1150);
+}
+
+const keys={};
+window.addEventListener("keydown",e=>{
+  keys[e.code]=true;
+  if(e.code==="KeyR")reload();
+  if(e.code==="Space" && started && camera.position.y<2.2)camera.cameraDirection.y=0.16;
+});
+window.addEventListener("keyup",e=>keys[e.code]=false);
+canvas.addEventListener("click",()=>{
+  if(started && document.pointerLockElement!==canvas && !("ontouchstart" in window)){
+    canvas.requestPointerLock?.();
+  }
+  shoot();
+});
+
+document.getElementById("start").addEventListener("click",()=>{
+  started=true;
+  document.getElementById("overlay").style.display="none";
+  if(!("ontouchstart" in window))canvas.requestPointerLock?.();
+  showMessage("MISSION START",1200);
+});
+
+document.getElementById("reload").addEventListener("pointerdown",e=>{e.preventDefault();reload();});
+document.getElementById("fire").addEventListener("pointerdown",e=>{e.preventDefault();shoot();});
+document.getElementById("jump").addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  if(started)camera.cameraDirection.y=0.16;
+});
+
+// Mobile movement joystick
+const stickArea=document.getElementById("stickArea");
+const stick=document.getElementById("stick");
+let joystick={x:0,y:0},stickPointer=null;
+stickArea.addEventListener("pointerdown",e=>{
+  stickPointer=e.pointerId;
+  stickArea.setPointerCapture(e.pointerId);
+});
+stickArea.addEventListener("pointermove",e=>{
+  if(e.pointerId!==stickPointer)return;
+  const r=stickArea.getBoundingClientRect();
+  let x=e.clientX-(r.left+r.width/2);
+  let y=e.clientY-(r.top+r.height/2);
+  const length=Math.hypot(x,y);
+  if(length>42){x=x/length*42;y=y/length*42;}
+  joystick.x=x/42;
+  joystick.y=y/42;
+  stick.style.transform=`translate(${x}px,${y}px)`;
+});
+function resetStick(){
+  stickPointer=null;
+  joystick={x:0,y:0};
+  stick.style.transform="translate(0px,0px)";
+}
+stickArea.addEventListener("pointerup",resetStick);
+stickArea.addEventListener("pointercancel",resetStick);
+
+// Touch dragging on the right side rotates the camera
+let lookPointer=null,lastX=0,lastY=0;
+canvas.addEventListener("pointerdown",e=>{
+  if(e.pointerType!=="touch" || e.clientX<innerWidth*0.35)return;
+  lookPointer=e.pointerId;
+  lastX=e.clientX;
+  lastY=e.clientY;
+});
+canvas.addEventListener("pointermove",e=>{
+  if(e.pointerId!==lookPointer || !started)return;
+  const dx=e.clientX-lastX;
+  const dy=e.clientY-lastY;
+  camera.rotation.y+=dx*0.004;
+  camera.rotation.x+=dy*0.003;
+  camera.rotation.x=Math.max(-1.35,Math.min(1.35,camera.rotation.x));
+  lastX=e.clientX;
+  lastY=e.clientY;
+});
+function stopLook(e){if(e.pointerId===lookPointer)lookPointer=null;}
+canvas.addEventListener("pointerup",stopLook);
+canvas.addEventListener("pointercancel",stopLook);
+
+// Target movement and player movement
+let elapsed=0;
+scene.onBeforeRenderObservable.add(()=>{
+  if(!started)return;
+  const dt=engine.getDeltaTime()/1000;
+  elapsed+=dt;
+  targets.forEach(t=>{
+    if(!t.alive)return;
+    t.root.position.x=t.baseX+Math.sin(elapsed*0.75+t.phase)*1.3;
+  });
+
+  const forward=new BABYLON.Vector3(Math.sin(camera.rotation.y),0,Math.cos(camera.rotation.y));
+  const right=new BABYLON.Vector3(forward.z,0,-forward.x);
+  let move=new BABYLON.Vector3(0,0,0);
+  if(keys.KeyW)move.addInPlace(forward);
+  if(keys.KeyS)move.subtractInPlace(forward);
+  if(keys.KeyD)move.addInPlace(right);
+  if(keys.KeyA)move.subtractInPlace(right);
+  move.addInPlace(forward.scale(-joystick.y));
+  move.addInPlace(right.scale(joystick.x));
+  if(move.length()>0){
+    move.normalize();
+    camera.cameraDirection.x+=move.x*(keys.ShiftLeft?0.25:0.17);
+    camera.cameraDirection.z+=move.z*(keys.ShiftLeft?0.25:0.17);
+  }
+});
+
+engine.runRenderLoop(()=>scene.render());
+window.addEventListener("resize",()=>engine.resize());
+})();
+</script>
+</body>
+</html>
